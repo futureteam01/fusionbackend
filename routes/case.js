@@ -18,6 +18,7 @@ router.post('/create-new', async (req, res) => {
       summary,
       status: normalizedStatus,
       
+      
     });
     await newCase.save();
     res.status(201).json({ msg: 'Case created successfully' });
@@ -27,20 +28,25 @@ router.post('/create-new', async (req, res) => {
 });
 
 // Get all cases by logged-in staff
-router.get('/my-cases', async (req, res) => {
+router.get('/my-cases', async (req, res) => { // Add authentication middleware
   try {
-    const { staffId } = req.query;
-
-    if (!staffId) {
-      return res.status(400).json({ msg: 'Staff ID is required.' });
-    }
-
-    const cases = await Case.find({ createdBy: staffId });
-    res.json(cases);
+    // Get staff ID from authenticated user instead of query parameter
+    const staffId = req.user.id; // Assuming your auth middleware sets req.user
+    
+    const cases = await Case.find({ createdBy: staffId })
+      .sort({ createdAt: -1 }); // Add sorting by date
+      
+    res.json({ 
+      success: true,
+      count: cases.length,
+      data: cases
+    });
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    console.error(err);
+    res.status(500).json({ 
+      success: false,
+      msg: 'Server Error' 
+    });
   }
 });
-
-
 module.exports = router;
