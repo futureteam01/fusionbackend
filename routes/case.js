@@ -1,52 +1,72 @@
 // routes/cases.js
+
 const express = require('express');
-const Case = require('../models/Case');
-// const auth = require('../middleware/auth');
 const router = express.Router();
+const Case = require('../models/Case');
+const { isAuthenticated, isAdmin } = require('../middleware/auth');
 
-// Staff creates a case
-router.post('/create-new', async (req, res) => {
+
+router.post('/create-new', isAuthenticated, isAdmin, async (req, res) => {
+  console.log('✅ Authenticated as:', req.session.user);
+
+  const { title, summary, status } = req.body;
+
   try {
-    const { clientName, caseDate, summary, status } = req.body;
-
-    const normalizedStatus = 
-      status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-
     const newCase = new Case({
-      clientName,
-      caseDate,
+      title,
       summary,
-      status: normalizedStatus,
-      
-      
+      status,
+      createdBy: req.session.user.id
     });
+
     await newCase.save();
-    res.status(201).json({ msg: 'Case created successfully' });
+    res.status(201).json({ message: 'Case created successfully', case: newCase });
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    console.error('❌ Error saving case:', err.message);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// Get all cases by logged-in staff
-router.get('/my-cases', async (req, res) => { // Add authentication middleware
+
+
+// Get all cases (admin) or own cases (staff)
+router.get('/all-cases', async (req, res) => {
   try {
-    // Get staff ID from authenticated user instead of query parameter
-    const staffId = req.user.id; // Assuming your auth middleware sets req.user
-    
-    const cases = await Case.find({ createdBy: staffId })
-      .sort({ createdAt: -1 }); // Add sorting by date
-      
-    res.json({ 
-      success: true,
-      count: cases.length,
-      data: cases
-    });
+    const cases = await Case.find().populate('createdBy', 'email');
+    res.json(cases);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ 
-      success: false,
-      msg: 'Server Error' 
-    });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
+
+
+// Edit case (admin or owner only)
+router.put('/edit:id', async (req, res) => {
+  const { title, summary, status } = req.body;
+  try {
+    const updatedCase = await Case.findByIdAndUpdate(
+      req.params.id,
+      { title, summary, status },
+      { new: true }
+    ).populate('createdBy', 'email');
+
+    if (!updatedCase) return res.status(404).json({ message: 'Case not found' });
+    res.json(updatedCase);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Delete case (admin or owner only)
+router.delete('/delete:id', async (req, res) => {
+  try {
+    const deleted = await Case.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Case not found' });
+    res.json({ message: 'Case deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+
 module.exports = router;

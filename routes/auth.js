@@ -1,79 +1,67 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 const router = express.Router();
+const User = require('../models/User');
+const { isAuthenticated, isAdmin } = require('../middleware/auth');
 
-// Initial admin signup (one-time use)
+
+
+// Admin Register
 router.post('/register', async (req, res) => {
+  const { name, email, password } = req.body;
+
   try {
-    const { username, email, password } = req.body;
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ message: 'Email already registered' });
 
-    if (!username || !email || !password) {
-      return res.status(400).json({ msg: 'Username, email, and password are required.' });
-    }
+    const admin = new User({ name, email, password, role: 'admin' });
+    await admin.save();
 
-    // Check if an admin with this email already exists
-    const existingUser = await User.findOne({ email, username });
-    if (existingUser) {
-      return res.status(400).json({ msg: 'Admin already exists with this email' });
-    }
+    // FIX: Consistent session structure
+    req.session.user = { id: admin._id, role: admin.role };
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({
-      username,
-      email,
-      password: hashedPassword,
-      
-    });
-
-    await user.save();
-    res.status(201).json({ msg: 'Admin registered successfully' });
+    res.status(201).json({ message: 'Admin registered successfully' });
   } catch (err) {
-    res.status(500).json({ msg: err.message });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-  
-  // Login
-  
+
+
 router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user || !(await user.comparePassword(password))) {
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+  req.session.user = { id: user._id, role: user.role };
+  res.json({ message: 'Logged in', role: user.role });
+});
+
+
+// GET all admins
+router.get('/admins', async (req, res) => {
   try {
-    const { email, password } = req.body;
-
-    // Ensure both fields are provided
-    if (!email || !password) {
-      return res.status(400).json({ msg: 'Email and password are required.' });
-    }
-
-    // Look for a user with the given email
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ msg: 'Invalid email or password.' });
-    }
-
-    // Compare the entered password with the hashed password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ msg: 'Invalid email or password.' });
-    }
-
-    // Successful login
-    res.status(200).json({
-      msg: 'Login successful',
-      user: {
-        username: user.username,
-        email: user.email,
-        
-      }
-    });
+    const admins = await User.find({ role: 'admin' }).select('-password'); // Exclude password
+    res.json(admins);
   } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ msg: 'Server error. Please try again.' });
+    res.status(500).json({ message: 'Failed to fetch admins', error: err.message });
   }
 });
+
+
+router.post('/logout', (req, res) => {
+  req.session.destroy(() => res.json({ message: 'Logged out' }));
+});
+
+
+
+router.get('/me', (req, res) => {
+  res.json(req.session.user || null);
+});
+
 
 module.exports = router;
 
-  
-  
+
+
+

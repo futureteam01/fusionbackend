@@ -1,15 +1,15 @@
+// models/Case.js
 const mongoose = require('mongoose');
 
-const CaseSchema = new mongoose.Schema({
-  clientName: String,
-  caseDate: Date,
-  summary: String,
-  status: { type: String, enum: ['Completed', 'Pending', 'Further Action'], default: 'Pending' },
-  // createdBy: {
-  //   type: mongoose.Schema.Types.ObjectId,
-  //   ref: 'Staff', // or 'User' or 'Admin' depending on your system
-  //   required: true},
-  
-});
+const caseSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  summary: { type: String, required: true },
+  status: {
+    type: String,
+    enum: ['open', 'closed', 'further action'],
+    default: 'open'
+  },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+}, { timestamps: true });
 
-module.exports = mongoose.model('Case', CaseSchema);
+module.exports = mongoose.model('Case', caseSchema);
