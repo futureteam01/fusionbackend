@@ -19,26 +19,28 @@ mongoose.connect(MONGO_URI)
   })
   .catch((err) => {
     console.error('❌ Failed to connect to MongoDB:', err.message);
-    process.exit(1); // Stop the server if DB connection fails
+    process.exit(1); 
   });
 
 // Middleware
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
-app.use(express.urlencoded({ extended: true })); // <-- for form-urlencoded (e.g., Thunder Client)
-app.use(bodyParser.json()); // <-- for JSON payloads
+app.use(express.urlencoded({ extended: true })); 
+app.use(bodyParser.json()); // 
 
 app.use(session({
   secret: 'your_secret_key',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({ mongoUrl: MONGO_URI }),
-  cookie: { secure: false, httpOnly: true, maxAge: 1000 * 60 * 60 * 24 },
+  cookie: { secure: false, httpOnly: true, maxAge: 1000 * 60 * 60 * 24, sameSite: 'lax' },
 }));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/cases', caseRoutes);
+
+
 
 // Start server
 app.listen(PORT, () => {

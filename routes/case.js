@@ -1,72 +1,89 @@
-// routes/cases.js
-
 const express = require('express');
-const router = express.Router();
 const Case = require('../models/Case');
-const { isAuthenticated, isAdmin } = require('../middleware/auth');
 
+const router = express.Router();
 
-router.post('/create-new', isAuthenticated, isAdmin, async (req, res) => {
-  console.log('✅ Authenticated as:', req.session.user);
-
-  const { title, summary, status } = req.body;
-
+// Create a Case
+router.post('/create', async (req, res) => {
   try {
-    const newCase = new Case({
-      title,
-      summary,
-      status,
-      createdBy: req.session.user.id
-    });
+    const { title, status, summary, userId } = req.body;
 
-    await newCase.save();
+    if (!userId) return res.status(400).json({ message: 'userId required' });
+
+    const newCase = await Case.create({ title, status, summary, user: userId });
     res.status(201).json({ message: 'Case created successfully', case: newCase });
   } catch (err) {
-    console.error('❌ Error saving case:', err.message);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: err.message });
+  }
+});
+// Get all cases for a specific user
+router.get('/case/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const userCases = await Case.find({ user: userId });
+
+    res.status(200).json(userCases);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put('/edit/:id', async (req, res) => {
+  try {
+    const { title, status, summary, userId } = req.body;
+    const existingCase = await Case.findById(req.params.id);
+
+    if (!existingCase) return res.status(404).json({ message: 'Case not found' });
+    if (existingCase.user.toString() !== userId) return res.status(403).json({ message: 'Not authorized' });
+
+    const updated = await Case.findByIdAndUpdate(req.params.id, { title, status, summary }, { new: true });
+    res.status(200).json({ message: 'Case updated', case: updated });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
 
-
-// Get all cases (admin) or own cases (staff)
+// Get All Cases
 router.get('/all-cases', async (req, res) => {
   try {
-    const cases = await Case.find().populate('createdBy', 'email');
-    res.json(cases);
+    const cases = await Case.find();
+    res.status(200).json(cases);
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-
-// Edit case (admin or owner only)
-router.put('/edit:id', async (req, res) => {
-  const { title, summary, status } = req.body;
+// Edit a Case
+router.put('/edit/:id', async (req, res) => {
   try {
+    const { title, status, summary } = req.body;
+
     const updatedCase = await Case.findByIdAndUpdate(
       req.params.id,
-      { title, summary, status },
+      { title, status, summary },
       { new: true }
-    ).populate('createdBy', 'email');
+    );
 
     if (!updatedCase) return res.status(404).json({ message: 'Case not found' });
-    res.json(updatedCase);
+
+    res.status(200).json({ message: 'Case updated', case: updatedCase });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// Delete case (admin or owner only)
-router.delete('/delete:id', async (req, res) => {
+// Delete a Case
+router.delete('/delete/:id', async (req, res) => {
   try {
-    const deleted = await Case.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: 'Case not found' });
-    res.json({ message: 'Case deleted successfully' });
+    const deletedCase = await Case.findByIdAndDelete(req.params.id);
+    if (!deletedCase) return res.status(404).json({ message: 'Case not found' });
+
+    res.status(200).json({ message: 'Case deleted successfully' });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
-
 
 module.exports = router;

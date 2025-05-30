@@ -1,67 +1,64 @@
 const express = require('express');
-const router = express.Router();
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
-const { isAuthenticated, isAdmin } = require('../middleware/auth');
 
+const router = express.Router();
 
-
-// Admin Register
+// Register
 router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
-
   try {
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ message: 'Email already registered' });
+    const { name, email, password } = req.body;
 
-    const admin = new User({ name, email, password, role: 'admin' });
-    await admin.save();
+    const exists = await User.findOne({ email });
+    if (exists) return res.status(400).json({ message: 'User already exists' });
 
-    // FIX: Consistent session structure
-    req.session.user = { id: admin._id, role: admin.role };
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ name, email, password: hashedPassword });
 
-    res.status(201).json({ message: 'Admin registered successfully' });
+    res.status(201).json({ message: 'User registered', user });
   } catch (err) {
-    res.status(500).json({ message: 'Server error', error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
-
-
+// Login
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email });
-  if (!user || !(await user.comparePassword(password))) {
-    return res.status(401).json({ message: 'Invalid credentials' });
-  }
-  req.session.user = { id: user._id, role: user.role };
-  res.json({ message: 'Logged in', role: user.role });
-});
-
-
-// GET all admins
-router.get('/admins', async (req, res) => {
   try {
-    const admins = await User.find({ role: 'admin' }).select('-password'); // Exclude password
-    res.json(admins);
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ message: 'Invalid credentials' });
+
+    res.status(200).json({ message: 'Login successful', user });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch admins', error: err.message });
+    res.status(500).json({ message: err.message });
   }
 });
 
 
-router.post('/logout', (req, res) => {
-  req.session.destroy(() => res.json({ message: 'Logged out' }));
+// Delete User
+router.delete('/delete/:id', async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.status(200).json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
-
-
-router.get('/me', (req, res) => {
-  res.json(req.session.user || null);
+// View All Users
+router.get('/all', async (req, res) => {
+  try {
+    const users = await User.find().select('-password'); // Exclude passwords
+    res.status(200).json(users);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
-
 
 module.exports = router;
-
-
-
-
